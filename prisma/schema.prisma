@@ -1,0 +1,148 @@
+// Keidence Inventory System — Prisma schema (Postgres / Neon.tech)
+//
+// Modeled on the core of OpenSourcePOS, trimmed to the pieces the first
+// three features need: authentication, a product catalog with stock, an
+// append-only inventory ledger, and sales that link back to inventory.
+//
+// A single-store model is used for now. A `location` dimension can be added
+// later without a rewrite: introduce a StockLocation table and swap the
+// scalar `stockQuantity` on Product for per-location rows — the ledger and
+// sale lines already carry the concept of a movement/quantity.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Staff accounts that can log into the terminal.
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  role         UserRole  @default(CASHIER)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  sales               Sale[]
+  inventoryMovements  InventoryTransaction[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  CASHIER
+}
+
+/// The catalog. `barcode` is the scanned value (QR or 1D barcode / SKU).
+model Product {
+  id            Int      @id @default(autoincrement())
+  name          String
+  category      String   @default("")
+  barcode       String?  @unique
+  description   String   @default("")
+  costPrice     Decimal  @default(0) @map("cost_price") @db.Decimal(15, 2)
+  unitPrice     Decimal  @default(0) @map("unit_price") @db.Decimal(15, 2)
+  stockQuantity Decimal  @default(0) @map("stock_quantity") @db.Decimal(15, 3)
+  reorderLevel  Decimal  @default(0) @map("reorder_level") @db.Decimal(15, 3)
+  deleted       Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  saleItems          SaleItem[]
+  inventoryMovements InventoryTransaction[]
+
+  @@index([category])
+  @@map("products")
+}
+
+/// Append-only ledger of every stock movement. Mirrors OSPOS `inventory`:
+/// each sale, restock, or manual adjustment writes one row. `quantityChange`
+/// is signed (negative for a sale, positive for a restock).
+model InventoryTransaction {
+  id             Int                @id @default(autoincrement())
+  productId      Int                @map("product_id")
+  userId         Int?               @map("user_id")
+  reason         InventoryReason    @default(ADJUSTMENT)
+  quantityChange Decimal            @map("quantity_change") @db.Decimal(15, 3)
+  comment        String             @default("")
+  saleId         Int?               @map("sale_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+  sale    Sale?   @relation(fields: [saleId], references: [id])
+
+  @@index([productId])
+  @@index([saleId])
+  @@map("inventory_transactions")
+}
+
+enum InventoryReason {
+  SALE
+  RESTOCK
+  ADJUSTMENT
+  RETURN
+  INITIAL
+}
+
+/// Sale header.
+model Sale {
+  id            Int      @id @default(autoincrement())
+  invoiceNumber String?  @unique @map("invoice_number")
+  userId        Int      @map("user_id")
+  customerName  String   @default("") @map("customer_name")
+  subtotal      Decimal  @default(0) @db.Decimal(15, 2)
+  taxTotal      Decimal  @default(0) @map("tax_total") @db.Decimal(15, 2)
+  total         Decimal  @default(0) @db.Decimal(15, 2)
+  comment       String   @default("")
+  soldAt        DateTime @default(now()) @map("sold_at")
+
+  user               User                   @relation(fields: [userId], references: [id])
+  items              SaleItem[]
+  payments           SalePayment[]
+  inventoryMovements InventoryTransaction[]
+
+  @@index([soldAt])
+  @@map("sales")
+}
+
+/// One line on a sale.
+model SaleItem {
+  id            Int     @id @default(autoincrement())
+  saleId        Int     @map("sale_id")
+  productId     Int     @map("product_id")
+  name          String
+  quantity      Decimal @db.Decimal(15, 3)
+  unitPrice     Decimal @map("unit_price") @db.Decimal(15, 2)
+  discountPct   Decimal @default(0) @map("discount_pct") @db.Decimal(15, 2)
+  lineTotal     Decimal @map("line_total") @db.Decimal(15, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+/// Payment(s) applied to a sale.
+model SalePayment {
+  id          Int      @id @default(autoincrement())
+  saleId      Int      @map("sale_id")
+  paymentType String   @map("payment_type")
+  amount      Decimal  @db.Decimal(15, 2)
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@map("sale_payments")
+}

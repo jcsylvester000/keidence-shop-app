@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+
+  /* Light theme surfaces + ink (RGB channels for Tailwind alpha support) */
+  --surface: 255 255 255;
+  --surface-muted: 246 248 249;
+  --surface-border: 228 233 236;
+  --ink: 15 27 30;
+  --ink-muted: 91 107 112;
+  --ink-faint: 138 153 158;
+
+  /* Base font size — scaled by the text-size setting */
+  --app-font-size: 16px;
+}
+
+.dark {
+  --surface: 22 28 30;
+  --surface-muted: 15 20 22;
+  --surface-border: 42 51 54;
+  --ink: 232 238 240;
+  --ink-muted: 158 172 176;
+  --ink-faint: 118 132 136;
+}
+
+/* Text-size settings scale the root font size; rem-based UI scales with it. */
+html[data-text-size="large"] {
+  --app-font-size: 18px;
+}
+html[data-text-size="xlarge"] {
+  --app-font-size: 20px;
+}
+
+html {
+  font-size: var(--app-font-size);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface-muted text-ink antialiased;
+}
+
+/* Hide number input spinners for a cleaner POS feel */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
