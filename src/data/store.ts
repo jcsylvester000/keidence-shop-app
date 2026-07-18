@@ -391,9 +391,12 @@ export const getPreOrders = cached((): PreOrder[] =>
     .sort((a, b) => (a.expectedDate < b.expectedDate ? -1 : 1))
 );
 
-export function getActivePreOrders(): PreOrder[] {
-  return getPreOrders().filter((p) => p.status !== "CANCELLED");
-}
+// Must be cached() because it's consumed via useStore — an un-memoized
+// .filter() would return a new array each render and trigger an infinite loop
+// (React error #185 / "getSnapshot should be cached").
+export const getActivePreOrders = cached((): PreOrder[] =>
+  getPreOrders().filter((p) => p.status !== "CANCELLED")
+);
 
 function derive(order: PreOrder): PreOrder["status"] {
   if (order.status === "COMPLETED" || order.status === "CANCELLED") {
