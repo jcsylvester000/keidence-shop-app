@@ -1,0 +1,13 @@
+# Netlify deployment config for the Keidence Inventory System.
+# Uses the official Next.js runtime (auto-detected). Set DATABASE_URL and
+# SESSION_SECRET in Netlify → Site settings → Environment variables.
+
+[build]
+  command = "prisma generate && next build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

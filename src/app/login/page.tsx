@@ -7,7 +7,6 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { useSession } from "@/lib/session";
-import { authenticate } from "@/data/store";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,7 +21,7 @@ export default function LoginPage() {
     if (!loading && user) router.replace("/dashboard");
   }, [loading, user, router]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -32,17 +31,24 @@ export default function LoginPage() {
     }
 
     setSubmitting(true);
-    // Simulated latency so the flow feels real; swap for a real API call later.
-    setTimeout(() => {
-      const session = authenticate(username, password);
-      if (!session) {
-        setError("Invalid username or password.");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.user) {
+        setError(data.error || "Invalid username or password.");
         setSubmitting(false);
         return;
       }
-      setUser(session);
+      setUser(data.user);
       router.replace("/dashboard");
-    }, 350);
+    } catch {
+      setError("Couldn't reach the server. Please try again.");
+      setSubmitting(false);
+    }
   }
 
   return (

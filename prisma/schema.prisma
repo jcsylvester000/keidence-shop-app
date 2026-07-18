@@ -1,13 +1,9 @@
 // Keidence Inventory System — Prisma schema (Postgres / Neon.tech)
 //
-// Modeled on the core of OpenSourcePOS, trimmed to the pieces the first
-// three features need: authentication, a product catalog with stock, an
-// append-only inventory ledger, and sales that link back to inventory.
-//
-// A single-store model is used for now. A `location` dimension can be added
-// later without a rewrite: introduce a StockLocation table and swap the
-// scalar `stockQuantity` on Product for per-location rows — the ledger and
-// sale lines already carry the concept of a movement/quantity.
+// Connects over HTTPS via the Neon serverless driver adapter so it works from
+// serverless platforms (Netlify) and restricted networks. Covers every domain
+// the front end uses: auth, catalog, inventory ledger, sales, reservations,
+// pre-orders (batch sales), and store settings.
 
 generator client {
   provider = "prisma-client-js"
@@ -18,20 +14,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Staff accounts that can log into the terminal.
-model User {
-  id           Int       @id @default(autoincrement())
-  username     String    @unique
-  passwordHash String    @map("password_hash")
-  firstName    String    @map("first_name")
-  lastName     String    @map("last_name")
-  role         UserRole  @default(CASHIER)
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+// ---------------------------------------------------------------------------
+// Users & auth
+// ---------------------------------------------------------------------------
 
-  sales               Sale[]
-  inventoryMovements  InventoryTransaction[]
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  role         UserRole @default(CASHIER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  sales              Sale[]
+  inventoryMovements InventoryTransaction[]
 
   @@map("users")
 }
@@ -42,7 +41,34 @@ enum UserRole {
   CASHIER
 }
 
-/// The catalog. `barcode` is the scanned value (QR or 1D barcode / SKU).
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+model Category {
+  id     Int    @id @default(autoincrement())
+  name   String
+  prefix String
+
+  templates ProductTemplate[]
+
+  @@map("categories")
+}
+
+model ProductTemplate {
+  id               Int     @id @default(autoincrement())
+  name             String
+  categoryId       Int     @map("category_id")
+  code             String  @unique
+  defaultCostPrice Decimal @default(0) @map("default_cost_price") @db.Decimal(15, 2)
+  defaultUnitPrice Decimal @default(0) @map("default_unit_price") @db.Decimal(15, 2)
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("product_templates")
+}
+
 model Product {
   id            Int      @id @default(autoincrement())
   name          String
@@ -54,9 +80,11 @@ model Product {
   stockQuantity Decimal  @default(0) @map("stock_quantity") @db.Decimal(15, 3)
   reorderLevel  Decimal  @default(0) @map("reorder_level") @db.Decimal(15, 3)
   deleted       Boolean  @default(false)
+  templateId    Int?     @map("template_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  template           ProductTemplate?       @relation(fields: [templateId], references: [id])
   saleItems          SaleItem[]
   inventoryMovements InventoryTransaction[]
 
@@ -64,18 +92,19 @@ model Product {
   @@map("products")
 }
 
-/// Append-only ledger of every stock movement. Mirrors OSPOS `inventory`:
-/// each sale, restock, or manual adjustment writes one row. `quantityChange`
-/// is signed (negative for a sale, positive for a restock).
+// ---------------------------------------------------------------------------
+// Inventory ledger
+// ---------------------------------------------------------------------------
+
 model InventoryTransaction {
-  id             Int                @id @default(autoincrement())
-  productId      Int                @map("product_id")
-  userId         Int?               @map("user_id")
-  reason         InventoryReason    @default(ADJUSTMENT)
-  quantityChange Decimal            @map("quantity_change") @db.Decimal(15, 3)
-  comment        String             @default("")
-  saleId         Int?               @map("sale_id")
-  createdAt      DateTime           @default(now()) @map("created_at")
+  id             Int             @id @default(autoincrement())
+  productId      Int             @map("product_id")
+  userId         Int?            @map("user_id")
+  reason         InventoryReason @default(ADJUSTMENT)
+  quantityChange Decimal         @map("quantity_change") @db.Decimal(15, 3)
+  comment        String          @default("")
+  saleId         Int?            @map("sale_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
 
   product Product @relation(fields: [productId], references: [id])
   user    User?   @relation(fields: [userId], references: [id])
@@ -94,13 +123,19 @@ enum InventoryReason {
   INITIAL
 }
 
-/// Sale header.
+// ---------------------------------------------------------------------------
+// Sales
+// ---------------------------------------------------------------------------
+
 model Sale {
   id            Int      @id @default(autoincrement())
   invoiceNumber String?  @unique @map("invoice_number")
   userId        Int      @map("user_id")
   customerName  String   @default("") @map("customer_name")
   subtotal      Decimal  @default(0) @db.Decimal(15, 2)
+  net           Decimal  @default(0) @db.Decimal(15, 2)
+  taxRate       Decimal  @default(0) @map("tax_rate") @db.Decimal(6, 2)
+  taxInclusive  Boolean  @default(true) @map("tax_inclusive")
   taxTotal      Decimal  @default(0) @map("tax_total") @db.Decimal(15, 2)
   total         Decimal  @default(0) @db.Decimal(15, 2)
   comment       String   @default("")
@@ -115,16 +150,15 @@ model Sale {
   @@map("sales")
 }
 
-/// One line on a sale.
 model SaleItem {
-  id            Int     @id @default(autoincrement())
-  saleId        Int     @map("sale_id")
-  productId     Int     @map("product_id")
-  name          String
-  quantity      Decimal @db.Decimal(15, 3)
-  unitPrice     Decimal @map("unit_price") @db.Decimal(15, 2)
-  discountPct   Decimal @default(0) @map("discount_pct") @db.Decimal(15, 2)
-  lineTotal     Decimal @map("line_total") @db.Decimal(15, 2)
+  id          Int     @id @default(autoincrement())
+  saleId      Int     @map("sale_id")
+  productId   Int     @map("product_id")
+  name        String
+  quantity    Decimal @db.Decimal(15, 3)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
+  discountPct Decimal @default(0) @map("discount_pct") @db.Decimal(15, 2)
+  lineTotal   Decimal @map("line_total") @db.Decimal(15, 2)
 
   sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
@@ -134,15 +168,120 @@ model SaleItem {
   @@map("sale_items")
 }
 
-/// Payment(s) applied to a sale.
 model SalePayment {
-  id          Int      @id @default(autoincrement())
-  saleId      Int      @map("sale_id")
-  paymentType String   @map("payment_type")
-  amount      Decimal  @db.Decimal(15, 2)
+  id          Int     @id @default(autoincrement())
+  saleId      Int     @map("sale_id")
+  paymentType String  @map("payment_type")
+  amount      Decimal @db.Decimal(15, 2)
 
   sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@index([saleId])
   @@map("sale_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Repair-space reservations
+// ---------------------------------------------------------------------------
+
+model Reservation {
+  id             Int               @id @default(autoincrement())
+  reference      String            @unique
+  customerName   String            @map("customer_name")
+  contactNumber  String            @default("") @map("contact_number")
+  contactEmail   String            @default("") @map("contact_email")
+  socialMedia    String            @default("") @map("social_media")
+  date           String
+  hours          Int[]
+  hourlyRate     Decimal           @map("hourly_rate") @db.Decimal(15, 2)
+  taxRate        Decimal           @map("tax_rate") @db.Decimal(6, 2)
+  taxInclusive   Boolean           @map("tax_inclusive")
+  notes          String            @default("")
+  status         ReservationStatus @default(BOOKED)
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  @@index([date])
+  @@map("reservations")
+}
+
+enum ReservationStatus {
+  BOOKED
+  COMPLETED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Pre-orders (batch sales)
+// ---------------------------------------------------------------------------
+
+model PreOrder {
+  id            Int            @id @default(autoincrement())
+  reference     String         @unique
+  clientName    String         @map("client_name")
+  contactNumber String         @default("") @map("contact_number")
+  contactEmail  String         @default("") @map("contact_email")
+  socialMedia   String         @default("") @map("social_media")
+  expectedDate  String         @map("expected_date")
+  taxRate       Decimal        @map("tax_rate") @db.Decimal(6, 2)
+  taxInclusive  Boolean        @map("tax_inclusive")
+  notes         String         @default("")
+  status        PreOrderStatus @default(PENDING)
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  lines PreOrderLine[]
+
+  @@index([expectedDate])
+  @@map("pre_orders")
+}
+
+model PreOrderLine {
+  id         Int     @id @default(autoincrement())
+  preOrderId Int     @map("pre_order_id")
+  productId  Int?    @map("product_id")
+  name       String
+  unitPrice  Decimal @map("unit_price") @db.Decimal(15, 2)
+  quantity   Decimal @db.Decimal(15, 3)
+  received   Boolean @default(false)
+  position   Int     @default(0)
+
+  preOrder PreOrder @relation(fields: [preOrderId], references: [id], onDelete: Cascade)
+
+  @@index([preOrderId])
+  @@map("pre_order_lines")
+}
+
+enum PreOrderStatus {
+  PENDING
+  ORDERING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Store settings (single row, key = 1)
+// ---------------------------------------------------------------------------
+
+model StoreSettings {
+  id                Int     @id @default(1)
+  storeName         String  @map("store_name")
+  tagline           String  @default("")
+  address1          String  @default("")
+  address2          String  @default("")
+  tin               String  @default("")
+  phone             String  @default("")
+  email             String  @default("")
+  website           String  @default("")
+  businessReg       String  @default("") @map("business_reg")
+  receiptFooter     String  @default("") @map("receipt_footer")
+  invoicePrefix     String  @default("KEI") @map("invoice_prefix")
+  defaultVatRate    Decimal @default(12) @map("default_vat_rate") @db.Decimal(6, 2)
+  vatInclusive      Boolean @default(true) @map("vat_inclusive")
+  repairWeekdayOpen  Int    @default(10) @map("repair_weekday_open")
+  repairWeekdayClose Int    @default(19) @map("repair_weekday_close")
+  repairWeekendOpen  Int    @default(10) @map("repair_weekend_open")
+  repairWeekendClose Int    @default(19) @map("repair_weekend_close")
+  repairHourlyRate  Decimal @default(150) @map("repair_hourly_rate") @db.Decimal(15, 2)
+
+  @@map("store_settings")
 }

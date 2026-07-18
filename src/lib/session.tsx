@@ -3,10 +3,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/types";
+import { hydrateStore } from "@/data/store";
 
-// A lightweight client-side session. This is a front-end stub — when the DB
-// is wired, this gets replaced by real cookie/JWT auth (e.g. NextAuth). The
-// call sites (useSession / login / logout) stay the same.
+// Real cookie-session auth. The session lives in an HTTP-only cookie set by
+// /api/auth/login. This context reflects the current user by asking
+// /api/auth/me on mount, and hydrates the data store once authenticated.
 
 interface SessionCtx {
   user: SessionUser | null;
@@ -16,7 +17,6 @@ interface SessionCtx {
 }
 
 const Ctx = createContext<SessionCtx | null>(null);
-const KEY = "keidence.session";
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<SessionUser | null>(null);
@@ -24,27 +24,39 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    try {
-      const raw =
-        typeof window !== "undefined" ? window.name && window.name.startsWith(KEY) ? window.name.slice(KEY.length) : "" : "";
-      if (raw) setUserState(JSON.parse(raw));
-    } catch {
-      /* ignore */
-    }
-    setLoading(false);
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        if (!active) return;
+        if (data.user) {
+          setUserState(data.user);
+          await hydrateStore();
+        }
+      } catch {
+        /* offline / not logged in */
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const setUser = (u: SessionUser | null) => {
     setUserState(u);
-    // Persist in window.name (survives client-side navigation without using
-    // localStorage, which is intentionally avoided). Cleared on tab close.
-    if (typeof window !== "undefined") {
-      window.name = u ? KEY + JSON.stringify(u) : "";
-    }
+    if (u) hydrateStore(true);
   };
 
-  const logout = () => {
-    setUser(null);
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      /* ignore */
+    }
+    setUserState(null);
     router.push("/login");
   };
 

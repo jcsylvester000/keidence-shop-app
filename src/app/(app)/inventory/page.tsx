@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   Plus,
@@ -21,7 +21,6 @@ import {
   getProducts,
   upsertProduct,
   adjustStock,
-  getMovementsForProduct,
   deleteProduct,
   getCategories,
   getTemplates,
@@ -559,12 +558,40 @@ function HistoryModal({
   product: Product;
   onClose: () => void;
 }) {
-  const movements = getMovementsForProduct(product.id);
+  const [movements, setMovements] = useState<
+    {
+      id: number;
+      reason: string;
+      quantityChange: number;
+      comment: string;
+      createdAt: string;
+    }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/products/movements?productId=${product.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (active) {
+          setMovements(d.movements ?? []);
+          setLoading(false);
+        }
+      })
+      .catch(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [product.id]);
+
   return (
     <ModalShell title="Stock history" onClose={onClose}>
       <div className="p-5">
         <div className="mb-4 text-sm font-medium text-ink">{product.name}</div>
-        {movements.length === 0 ? (
+        {loading ? (
+          <p className="py-6 text-center text-sm text-ink-faint">Loading…</p>
+        ) : movements.length === 0 ? (
           <p className="py-6 text-center text-sm text-ink-faint">
             No movements recorded.
           </p>
