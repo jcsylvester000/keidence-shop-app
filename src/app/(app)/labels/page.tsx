@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { QrCode } from "@/components/qr-code";
 import { useStore } from "@/lib/use-store";
 import { getProducts, getSettings } from "@/data/store";
@@ -71,6 +72,28 @@ export default function LabelsPage() {
   const labels: Product[] = chosen.flatMap((s) =>
     Array.from({ length: s.qty }, () => s.product)
   );
+
+  // ---- Sheet-fit math (A4) ----
+  // A4 printable area after an 8mm margin ≈ 194mm × 281mm. Each label is a
+  // fixed physical size so we can honestly estimate how many fit per page.
+  const PRINTABLE_W_MM = 194;
+  const PRINTABLE_H_MM = 281;
+  // Approx label height in mm: the QR (~18mm) plus text lines. Width follows
+  // from the column count. These are deliberately conservative so the real
+  // print never overflows what the preview shows.
+  const labelHeightMm = showName && showPrice ? 24 : 20;
+  const rowsPerPage = Math.max(1, Math.floor(PRINTABLE_H_MM / labelHeightMm));
+  const perPage = format === "sheet" ? columns * rowsPerPage : rowsPerPage;
+  const sheetsNeeded =
+    totalLabels === 0 ? 0 : Math.ceil(totalLabels / Math.max(1, perPage));
+
+  // Split labels into pages for the sheet preview.
+  const pages: Product[][] =
+    format === "sheet"
+      ? Array.from({ length: sheetsNeeded }, (_, i) =>
+          labels.slice(i * perPage, (i + 1) * perPage)
+        )
+      : [labels];
 
   function setQty(id: number, qty: number) {
     setSelections((prev) => {
@@ -252,51 +275,101 @@ export default function LabelsPage() {
 
         {/* Right: preview / print area */}
         <div>
-          <div className="mb-2 text-sm font-medium text-ink print:hidden">
-            Preview
-          </div>
-          <div className="label-print rounded-2xl border border-surface-border bg-white p-4 print:border-0 print:p-0">
-            {totalLabels === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-ink-faint">
-                <Tag className="h-10 w-10 opacity-40" />
-                <p className="text-sm">
-                  Add products on the left to preview labels here.
-                </p>
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  "gap-2",
-                  format === "sheet" ? "grid" : "flex flex-col items-center"
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 print:hidden">
+            <div className="text-sm font-medium text-ink">Preview</div>
+            {totalLabels > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge tone="brand">
+                  {totalLabels} label{totalLabels === 1 ? "" : "s"}
+                </Badge>
+                {format === "sheet" ? (
+                  <>
+                    <Badge tone="default">{perPage} fit per A4 sheet</Badge>
+                    <Badge tone={sheetsNeeded > 1 ? "warning" : "success"}>
+                      {sheetsNeeded} sheet{sheetsNeeded === 1 ? "" : "s"}
+                    </Badge>
+                  </>
+                ) : (
+                  <Badge tone="default">continuous roll</Badge>
                 )}
-                style={
-                  format === "sheet"
-                    ? {
-                        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-                      }
-                    : undefined
-                }
-              >
-                {labels.map((p, i) => (
-                  <LabelCell
-                    key={i}
-                    product={p}
-                    settings={settings}
-                    showName={showName}
-                    showPrice={showPrice}
-                    roll={format === "roll"}
-                  />
-                ))}
               </div>
             )}
           </div>
+
+          {totalLabels === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-surface-border bg-surface py-16 text-center text-ink-faint">
+              <Tag className="h-10 w-10 opacity-40" />
+              <p className="text-sm">
+                Add products on the left to preview the sheet layout here.
+              </p>
+            </div>
+          ) : format === "sheet" ? (
+            <>
+              <p className="mb-2 text-xs text-ink-faint print:hidden">
+                Dashed lines are cut guides — cut along them, don&apos;t cut
+                inside. This is exactly how the A4 sheet(s) will print.
+              </p>
+              <div className="label-print space-y-6">
+                {pages.map((pageLabels, pageIdx) => (
+                  <div
+                    key={pageIdx}
+                    className="sheet mx-auto bg-white shadow-card ring-1 ring-surface-border print:shadow-none print:ring-0"
+                    style={{
+                      // A4 aspect ratio (210 × 297). Padding = the 8mm print
+                      // margin, scaled into the on-screen preview.
+                      aspectRatio: "210 / 297",
+                      width: "100%",
+                      maxWidth: 480,
+                      padding: "3.8%",
+                    }}
+                  >
+                    <div
+                      className="grid h-full w-full content-start gap-[3px]"
+                      style={{
+                        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                        gridAutoRows: "min-content",
+                      }}
+                    >
+                      {pageLabels.map((p, i) => (
+                        <LabelCell
+                          key={i}
+                          product={p}
+                          settings={settings}
+                          showName={showName}
+                          showPrice={showPrice}
+                          roll={false}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-1 text-center text-[9px] text-gray-300 print:hidden">
+                      A4 · sheet {pageIdx + 1} of {pages.length}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="label-print flex flex-col items-center gap-2 rounded-2xl border border-surface-border bg-surface p-4 print:border-0 print:bg-white">
+              {labels.map((p, i) => (
+                <LabelCell
+                  key={i}
+                  product={p}
+                  settings={settings}
+                  showName={showName}
+                  showPrice={showPrice}
+                  roll
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Print isolation: only the label grid prints. */}
+      {/* Print isolation: only the label sheets print, one A4 page each. */}
       <style jsx global>{`
         @media print {
           @page {
+            size: A4;
             margin: 8mm;
           }
           body * {
@@ -311,6 +384,20 @@ export default function LabelsPage() {
             left: 0;
             top: 0;
             width: 100%;
+          }
+          /* Each A4 preview page becomes one printed page. */
+          .sheet {
+            width: 100% !important;
+            max-width: none !important;
+            aspect-ratio: auto !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            break-after: page;
+            page-break-after: always;
+          }
+          .sheet:last-child {
+            break-after: auto;
+            page-break-after: auto;
           }
           .label-cell {
             break-inside: avoid;
@@ -376,25 +463,26 @@ function LabelCell({
   return (
     <div
       className={cn(
-        "label-cell flex items-center gap-3 rounded-md border border-gray-300 bg-white p-2 text-gray-900",
+        // Dashed border = the cut guide. Cut ALONG the dashes, not inside.
+        "label-cell flex items-center gap-2 rounded-sm border border-dashed border-gray-400 bg-white p-1.5 text-gray-900",
         roll ? "w-64" : "w-full"
       )}
     >
-      <QrCode value={product.barcode ?? String(product.id)} size={64} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+      <QrCode value={product.barcode ?? String(product.id)} size={roll ? 64 : 48} />
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-gray-500">
           {settings.storeName}
         </div>
         {showName && (
-          <div className="truncate text-xs font-medium leading-tight text-gray-900">
+          <div className="line-clamp-2 text-[10px] font-medium leading-tight text-gray-900">
             {product.name}
           </div>
         )}
-        <div className="mt-0.5 font-mono text-[10px] text-gray-500">
+        <div className="mt-0.5 truncate font-mono text-[8px] text-gray-500">
           {product.barcode ?? `#${product.id}`}
         </div>
         {showPrice && (
-          <div className="mt-0.5 text-sm font-bold text-gray-900">
+          <div className="mt-0.5 text-[13px] font-bold leading-none text-gray-900">
             {formatCurrency(product.unitPrice)}
           </div>
         )}
