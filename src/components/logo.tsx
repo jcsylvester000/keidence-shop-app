@@ -28,8 +28,11 @@ export function Logo({
       </div>
       {showText && (
         <div className="leading-tight">
-          <div className="text-sm font-semibold tracking-tight text-ink">
+          <div className="text-[15px] font-bold tracking-tight text-ink">
             Keidence
+            <span className="align-super text-[8px] font-semibold text-ink-faint">
+              ™
+            </span>
           </div>
           <div className="text-[11px] font-medium text-ink-faint">
             Inventory System

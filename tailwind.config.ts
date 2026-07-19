@@ -8,19 +8,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Keidence brand palette — deep teal accent, neutral surfaces
+        // Keidence brand palette — vivid magenta (matches the store logo).
+        // 600/700 are the primary-button shades: dark enough that white text
+        // stays legible; 50/100 are soft tinted backgrounds for chips/panels.
         brand: {
-          50: "#eefdfb",
-          100: "#d4f7f2",
-          200: "#adece5",
-          300: "#77dcd3",
-          400: "#3fc3ba",
-          500: "#1aa79f",
-          600: "#0f8781",
-          700: "#116b68",
-          800: "#135554",
-          900: "#144746",
-          950: "#052a2a",
+          50: "#fdf0fe",
+          100: "#fbe0fd",
+          200: "#f7bffb",
+          300: "#f28ef7",
+          400: "#ea4ff1",
+          500: "#e100f5", // logo magenta
+          600: "#c400d6",
+          700: "#a000ad",
+          800: "#82088c",
+          900: "#6c0c73",
+          950: "#48004d",
         },
         // Surface + ink flip between light and dark via CSS variables set in
         // globals.css (:root and .dark).

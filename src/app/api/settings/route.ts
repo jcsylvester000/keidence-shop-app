@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, requireRole } from "@/lib/api-guard";
+import { requireUser } from "@/lib/api-guard";
 import { toSettings } from "@/lib/serialize";
 import { audit } from "@/lib/audit";
+import { canAccessAdmin } from "@/lib/roles";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const auth = await requireUser();
   if (auth instanceof NextResponse) return auth;
-  const forbidden = requireRole(auth, ["ADMIN", "MANAGER"]);
-  if (forbidden) return forbidden;
+  // Admins and Super Admins may edit store settings.
+  if (!canAccessAdmin(auth.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const b = await req.json();
   // Only accept known fields.

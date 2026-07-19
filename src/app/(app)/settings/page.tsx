@@ -18,6 +18,7 @@ import { useStore } from "@/lib/use-store";
 import { getSettings, updateSettings } from "@/data/store";
 import { useSession } from "@/lib/session";
 import { useTheme, type TextSize } from "@/lib/theme";
+import { canAccessAdmin } from "@/lib/roles";
 import type { StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +27,7 @@ type Tab = "store" | "appearance";
 export default function SettingsPage() {
   const { user } = useSession();
   const [tab, setTab] = useState<Tab>("store");
-  const canEditStore = user?.role === "ADMIN" || user?.role === "MANAGER";
+  const canEditStore = !!user && canAccessAdmin(user.role);
 
   return (
     <div className="mx-auto max-w-4xl p-5 md:p-8">
@@ -63,7 +64,7 @@ export default function SettingsPage() {
               <p className="font-medium text-ink">Restricted</p>
               <p className="max-w-sm text-sm text-ink-muted">
                 Store and receipt details can only be changed by an Admin or
-                Manager. You can still adjust appearance settings.
+                Super Admin. You can still adjust appearance settings.
               </p>
             </CardContent>
           </Card>

@@ -28,6 +28,7 @@ import {
   generateProductCode,
 } from "@/data/store";
 import { useSession } from "@/lib/session";
+import { canAccessAdmin } from "@/lib/roles";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Category, ProductTemplate } from "@/lib/types";
 
@@ -36,7 +37,7 @@ type Tab = "templates" | "categories";
 export default function CatalogPage() {
   const { user } = useSession();
   const [tab, setTab] = useState<Tab>("templates");
-  const canEdit = user?.role === "ADMIN" || user?.role === "MANAGER";
+  const canEdit = !!user && canAccessAdmin(user.role);
 
   if (!canEdit) {
     return (
@@ -46,7 +47,8 @@ export default function CatalogPage() {
             <Lock className="h-8 w-8 text-ink-faint" />
             <p className="font-medium text-ink">Restricted</p>
             <p className="max-w-sm text-sm text-ink-muted">
-              The product catalog can only be managed by an Admin or Manager.
+              The product catalog can only be managed by an Admin or Super
+              Admin.
             </p>
           </CardContent>
         </Card>

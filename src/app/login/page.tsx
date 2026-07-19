@@ -59,7 +59,7 @@ export default function LoginPage() {
           className="pointer-events-none absolute inset-0 opacity-20"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 20% 20%, #3fc3ba 0, transparent 45%), radial-gradient(circle at 80% 60%, #116b68 0, transparent 40%)",
+              "radial-gradient(circle at 20% 20%, #ea4ff1 0, transparent 45%), radial-gradient(circle at 80% 60%, #a000ad 0, transparent 40%)",
           }}
         />
         <Logo className="[&_*]:text-white" />
