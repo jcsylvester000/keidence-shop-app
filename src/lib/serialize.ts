@@ -104,6 +104,7 @@ export function toReservation(r: any): Reservation {
     taxInclusive: r.taxInclusive,
     notes: r.notes,
     status: r.status,
+    source: r.source ?? "IN_STORE",
     createdAt: iso(r.createdAt),
   };
 }

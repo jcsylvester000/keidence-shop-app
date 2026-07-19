@@ -109,6 +109,8 @@ export interface Reservation {
   taxInclusive: boolean;
   notes: string;
   status: "BOOKED" | "COMPLETED" | "CANCELLED";
+  /** "IN_STORE" (cashier) or "ONLINE" (public booking link). */
+  source: string;
   createdAt: string;
 }
 

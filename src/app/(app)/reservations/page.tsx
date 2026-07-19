@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +14,8 @@ import {
   X,
   Trash2,
   CalendarCheck,
+  Link2,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -28,6 +30,7 @@ import {
   getReservations,
   updateReservationStatus,
   deleteReservation,
+  hydrateStore,
 } from "@/data/store";
 import { formatCurrency, computeVat, cn } from "@/lib/utils";
 import {
@@ -91,6 +94,13 @@ export default function ReservationsPage() {
   const [hoursEditor, setHoursEditor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justBooked, setJustBooked] = useState<Reservation | null>(null);
+
+  // Auto-refresh so online bookings from the public link show up live without
+  // the cashier reloading. Re-hydrates the store every 12s.
+  useEffect(() => {
+    const t = setInterval(() => hydrateStore(true), 12000);
+    return () => clearInterval(t);
+  }, []);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(anchor, i)),
@@ -207,9 +217,12 @@ export default function ReservationsPage() {
             {hourLabel(settings.repairWeekendClose)}
           </p>
         </div>
-        <Button variant="outline" onClick={() => setHoursEditor(true)}>
-          <Settings2 className="h-4 w-4" /> Hours &amp; rate
-        </Button>
+        <div className="flex items-center gap-2">
+          <CopyBookingLink />
+          <Button variant="outline" onClick={() => setHoursEditor(true)}>
+            <Settings2 className="h-4 w-4" /> Hours &amp; rate
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -532,6 +545,41 @@ function Legend({ className, label }: { className: string; label: string }) {
   );
 }
 
+// --- Copy public booking link ----------------------------------------------
+
+function CopyBookingLink() {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    const url =
+      typeof window !== "undefined" ? `${window.location.origin}/book` : "/book";
+    navigator.clipboard?.writeText(url).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => {
+        // Fallback: open the page so the cashier can copy from the address bar.
+        window.open("/book", "_blank");
+      }
+    );
+  }
+
+  return (
+    <Button variant="primary" onClick={copy}>
+      {copied ? (
+        <>
+          <Check className="h-4 w-4" /> Link copied!
+        </>
+      ) : (
+        <>
+          <Link2 className="h-4 w-4" /> Copy booking link
+        </>
+      )}
+    </Button>
+  );
+}
+
 // --- Reservation row with document actions ---------------------------------
 
 function ReservationRow({ reservation: r }: { reservation: Reservation }) {
@@ -555,11 +603,16 @@ function ReservationRow({ reservation: r }: { reservation: Reservation }) {
     <Card>
       <CardContent className="flex flex-wrap items-center gap-3 p-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-ink">{r.customerName}</span>
             <Badge tone={r.status === "COMPLETED" ? "success" : "brand"}>
               {r.status.toLowerCase()}
             </Badge>
+            {r.source === "ONLINE" && (
+              <Badge tone="warning">
+                <Globe className="h-3 w-3" /> online
+              </Badge>
+            )}
           </div>
           <div className="text-xs text-ink-muted">
             {r.reference} ·{" "}

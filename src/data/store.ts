@@ -343,6 +343,7 @@ export function createReservation(input: {
     ...input,
     hours: [...input.hours].sort((a, b) => a - b),
     status: "BOOKED",
+    source: "IN_STORE",
     createdAt: new Date().toISOString(),
   };
   c.reservations.push(optimistic);

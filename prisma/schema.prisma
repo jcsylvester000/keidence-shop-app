@@ -218,6 +218,8 @@ model Reservation {
   taxInclusive   Boolean           @map("tax_inclusive")
   notes          String            @default("")
   status         ReservationStatus @default(BOOKED)
+  /// Where the booking came from: "IN_STORE" (cashier) or "ONLINE" (public link).
+  source         String            @default("IN_STORE")
   createdAt      DateTime          @default(now()) @map("created_at")
 
   @@index([date])
