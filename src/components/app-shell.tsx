@@ -12,6 +12,8 @@ import {
   CalendarClock,
   PackageCheck,
   ShieldCheck,
+  Receipt,
+  BarChart3,
   Settings,
   LogOut,
   Sun,
@@ -27,6 +29,8 @@ import type { UserRole } from "@/lib/types";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
   { href: "/register", label: "Sales Register", icon: ScanLine, mobile: true },
+  { href: "/sales", label: "Sales", icon: Receipt, mobile: false },
+  { href: "/analytics", label: "Analytics", icon: BarChart3, mobile: false },
   { href: "/inventory", label: "Inventory", icon: Boxes, mobile: true },
   { href: "/reservations", label: "Reservations", icon: CalendarClock, mobile: false },
   { href: "/batch-sales", label: "Batch Sales", icon: PackageCheck, mobile: false },
