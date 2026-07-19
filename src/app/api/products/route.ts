@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/api-guard";
 import { toProduct } from "@/lib/serialize";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,11 @@ export async function POST(req: NextRequest) {
         },
       });
     }
+    await audit(auth, "product.update", {
+      entity: "product",
+      entityId: updated.id,
+      detail: `Edited '${updated.name}' (price ${data.unitPrice}, stock ${data.stockQuantity})`,
+    });
     return NextResponse.json({ product: toProduct(updated) });
   }
 
@@ -54,6 +60,11 @@ export async function POST(req: NextRequest) {
       comment: "Product created",
     },
   });
+  await audit(auth, "product.create", {
+    entity: "product",
+    entityId: created.id,
+    detail: `Added '${created.name}' (${data.category})`,
+  });
   return NextResponse.json({ product: toProduct(created) });
 }
 
@@ -64,6 +75,14 @@ export async function DELETE(req: NextRequest) {
 
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  await prisma.product.update({ where: { id }, data: { deleted: true } });
+  const removed = await prisma.product.update({
+    where: { id },
+    data: { deleted: true },
+  });
+  await audit(auth, "product.delete", {
+    entity: "product",
+    entityId: id,
+    detail: `Removed '${removed.name}'`,
+  });
   return NextResponse.json({ ok: true });
 }

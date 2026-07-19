@@ -2,7 +2,38 @@
 // numbers (not Decimal) since the mock layer runs in the browser. When the
 // DB is wired, API routes will map Prisma rows into these shapes.
 
-export type UserRole = "ADMIN" | "MANAGER" | "CASHIER";
+export type UserRole =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "EMPLOYEE"
+  // Legacy roles (still valid in the DB enum); treated like EMPLOYEE/ADMIN.
+  | "MANAGER"
+  | "CASHIER";
+
+/** A staff account, as shown in the Admin page. */
+export interface ManagedUser {
+  id: number;
+  username: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One audit-trail entry. */
+export interface AuditEntry {
+  id: number;
+  actorId: number | null;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  detail: string;
+  createdAt: string;
+}
 
 /** A managed product category. `prefix` seeds generated product codes. */
 export interface Category {

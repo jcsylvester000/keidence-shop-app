@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/api-guard";
 import { toPreOrder } from "@/lib/serialize";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,11 @@ export async function POST(req: NextRequest) {
       },
     },
     include: { lines: true },
+  });
+  await audit(auth, "preorder.create", {
+    entity: "preorder",
+    entityId: created.id,
+    detail: `${created.reference} · ${created.clientName} · ${lines.length} item(s) · pickup ${expectedDate}`,
   });
   return NextResponse.json({ preOrder: toPreOrder(created) });
 }

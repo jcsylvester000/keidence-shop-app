@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/api-guard";
 import { toSale } from "@/lib/serialize";
+import { audit } from "@/lib/audit";
 import { computeVat, makeInvoiceNumber } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -95,6 +96,12 @@ export async function POST(req: NextRequest) {
     }
 
     return created;
+  });
+
+  await audit(auth, "sale.complete", {
+    entity: "sale",
+    entityId: sale.id,
+    detail: `${invoiceNumber} · ${lines.length} item(s) · total ${vat.grandTotal.toFixed(2)} · ${b.customerName ?? "Walk-in"}`,
   });
 
   return NextResponse.json({ sale: toSale(sale) });

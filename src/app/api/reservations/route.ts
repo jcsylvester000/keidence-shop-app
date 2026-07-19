@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/api-guard";
 import { toReservation } from "@/lib/serialize";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,11 @@ export async function POST(req: NextRequest) {
       notes: String(b.notes ?? ""),
       status: "BOOKED",
     },
+  });
+  await audit(auth, "reservation.create", {
+    entity: "reservation",
+    entityId: created.id,
+    detail: `${created.reference} · ${created.customerName} · ${date} · ${hours.length}hr`,
   });
   return NextResponse.json({ reservation: toReservation(created) });
 }

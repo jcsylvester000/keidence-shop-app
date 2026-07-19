@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/api-guard";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,12 @@ export async function POST(req: NextRequest) {
       },
     }),
   ]);
+
+  await audit(auth, "inventory.adjust", {
+    entity: "product",
+    entityId: pid,
+    detail: `${d >= 0 ? "+" : ""}${d} · ${product.name} · ${String(comment ?? "")}`,
+  });
 
   return NextResponse.json({ ok: true });
 }

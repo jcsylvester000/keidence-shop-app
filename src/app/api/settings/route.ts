@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireRole } from "@/lib/api-guard";
 import { toSettings } from "@/lib/serialize";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -30,5 +31,9 @@ export async function POST(req: NextRequest) {
   if ("repairHourlyRate" in b) data.repairHourlyRate = Number(b.repairHourlyRate);
 
   const updated = await prisma.storeSettings.update({ where: { id: 1 }, data });
+  await audit(auth, "settings.update", {
+    entity: "settings",
+    detail: `Updated: ${Object.keys(data).join(", ")}`,
+  });
   return NextResponse.json({ settings: toSettings(updated) });
 }

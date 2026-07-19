@@ -36,9 +36,29 @@ model User {
 }
 
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
+  EMPLOYEE
+  // Legacy values kept so existing enum in DB stays valid; no new users use these.
   MANAGER
   CASHIER
+}
+
+/// Append-only audit trail: who did what, to what, and when.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?     @map("actor_id")
+  actorName String   @default("") @map("actor_name")
+  actorRole String   @default("") @map("actor_role")
+  action    String
+  entity    String   @default("")
+  entityId  String   @default("") @map("entity_id")
+  detail    String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@index([action])
+  @@map("audit_logs")
 }
 
 // ---------------------------------------------------------------------------

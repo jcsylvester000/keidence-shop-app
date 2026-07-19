@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/auth";
+import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -42,13 +43,18 @@ export async function POST(req: NextRequest) {
 
   await createSession(resolved.id);
 
-  return NextResponse.json({
-    user: {
-      id: resolved.id,
-      username: resolved.username,
-      firstName: resolved.firstName,
-      lastName: resolved.lastName,
-      role: resolved.role,
-    },
+  const sessionUser = {
+    id: resolved.id,
+    username: resolved.username,
+    firstName: resolved.firstName,
+    lastName: resolved.lastName,
+    role: resolved.role,
+  };
+  await audit(sessionUser, "auth.login", {
+    entity: "user",
+    entityId: resolved.id,
+    detail: `Signed in`,
   });
+
+  return NextResponse.json({ user: sessionUser });
 }

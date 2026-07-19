@@ -11,6 +11,7 @@ import {
   QrCode,
   CalendarClock,
   PackageCheck,
+  ShieldCheck,
   Settings,
   LogOut,
   Sun,
@@ -19,7 +20,9 @@ import {
 import { Logo } from "@/components/logo";
 import { useSession } from "@/lib/session";
 import { useTheme } from "@/lib/theme";
+import { canAccessAdmin } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/lib/types";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
@@ -29,8 +32,14 @@ const nav = [
   { href: "/batch-sales", label: "Batch Sales", icon: PackageCheck, mobile: false },
   { href: "/catalog", label: "Catalog", icon: BookOpen, mobile: false },
   { href: "/labels", label: "Price Labels", icon: QrCode, mobile: false },
+  { href: "/admin", label: "Admin", icon: ShieldCheck, mobile: false, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings, mobile: true },
 ];
+
+/** Nav items visible to the given role. */
+function visibleNav(role: UserRole | undefined) {
+  return nav.filter((item) => !item.adminOnly || (role && canAccessAdmin(role)));
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -59,7 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Logo />
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {nav.map((item) => {
+          {visibleNav(user.role).map((item) => {
             const active = pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
